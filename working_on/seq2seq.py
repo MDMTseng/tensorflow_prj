@@ -2,15 +2,16 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.python.ops import seq2seq
 from tensorflow.python.ops import rnn_cell
+import matplotlib.pyplot as plt
 
-seed = 7
 np.random.seed(7)
 
 
-def generate_sequences(sequence_num, sequence_length, batch_size):
-    x_data = np.random.uniform(0, 1, size=(sequence_num // batch_size, sequence_length, batch_size, 1))
+def generate_sequences(batch_num, sequence_length, batch_size):
+    x_data = np.random.uniform(0, 1, size=(batch_num, sequence_length, batch_size, 1))
     x_data = np.array(x_data, dtype=np.float32)
 
+    print(x_data.shape)
     y_data = []
     for x in x_data:
         sequence = [x[0]]
@@ -23,43 +24,20 @@ def generate_sequences(sequence_num, sequence_length, batch_size):
 
     return x_data, y_data
 
-def variable_summaries(var, name):
-    """Attach a lot of summaries to a Tensor."""
-    with tf.name_scope('summaries'):
-        mean = tf.reduce_mean(var)
-        tf.summary.scalar('mean/' + name, mean)
-        with tf.name_scope('stddev'):
-            stddev = tf.sqrt(tf.reduce_sum(tf.square(var - mean)))
-        tf.summary.scalar('sttdev/' + name, stddev)
-        tf.summary.scalar('max/' + name, tf.reduce_max(var))
-        tf.summary.scalar('min/' + name, tf.reduce_min(var))
-        tf.summary.histogram(name, var)
-
-def get_feed( pX, X, pY, Y):
-    feed_dict = {pX[i]: X[i] for i in range(len(X))}
-    feed_dict.update({pY[i]: Y[i] for i in range(len(Y))})
-    return feed_dict
-
-
-
 def main():
-    datapoints_number = 1000
-    sequence_size = 10
-    batch_size = 10
+    sequence_num = 1000
+    sequence_length = 100
+    batch_size = 1000
     data_point_dim = 1
 
-    if datapoints_number % float(batch_size) != 0:
-        raise ValueError('Number of samples must be divisible with batch size')
-
-    inputs, outputs = generate_sequences(sequence_num=datapoints_number, sequence_length=sequence_size,
+    inputs, outputs = generate_sequences(batch_num=sequence_num//batch_size, sequence_length=sequence_length,
                                          batch_size=batch_size)
+    print("inputs:",inputs.shape)#[batch_num, sequence_length, batch_size, data_point_dim]
+    encoder_inputs = [tf.placeholder(tf.float32, shape=[batch_size, data_point_dim]) for _ in range(sequence_length)]
 
-    input_dim = len(inputs[0][0])
-    output_dim = len(outputs[0][0])
-
-    encoder_inputs = [tf.placeholder(tf.float32, shape=[batch_size, data_point_dim]) for _ in range(input_dim)]
-
-    decoder_inputs = [tf.placeholder(tf.float32, shape=[batch_size, data_point_dim]) for _ in range(output_dim)]
+    print("encoder_inputs[:",sequence_length,"].get_shape()>>",encoder_inputs[0].get_shape())
+    decoder_inputs = [tf.placeholder(tf.float32, shape=[batch_size, data_point_dim]) for _ in range(sequence_length)]
+    print("decoder_inputs[:",sequence_length,"].get_shape()>>",decoder_inputs[0].get_shape())
 
     model_outputs, states = seq2seq.basic_rnn_seq2seq(encoder_inputs,
                                                       decoder_inputs,
@@ -68,39 +46,51 @@ def main():
     reshaped_outputs = tf.reshape(model_outputs, [-1])
     reshaped_results = tf.reshape(decoder_inputs, [-1])
 
-    cost = tf.reduce_sum(tf.squared_difference(reshaped_outputs, reshaped_results))
-    variable_summaries(cost, 'cost')
+    cost = tf.reduce_mean(tf.squared_difference(reshaped_outputs, reshaped_results))
 
     step = tf.train.AdamOptimizer(learning_rate=0.01).minimize(cost)
 
-    init = tf.global_variables_initializer()
-
-    merged = tf.merge_all_summaries()
-
-    import matplotlib.pyplot as plt
-
     with tf.Session() as session:
-        session.run(init)
+        session.run(tf.global_variables_initializer())
         # writer = tf.train.SummaryWriter("/tmp/tensor/train", session.graph, )
 
         costs = []
-        n_iterations = 100
+        n_iterations = 300
         for i in range(n_iterations):
             batch_costs = []
-            summary = None
-
             for batch_inputs, batch_outputs in zip(inputs, outputs):
+                #inputs=>[batch_num, sequence_length, batch_size, data_point_dim]
+                #print("batch_inputs:",batch_inputs.shape)
+                #batch_inputs=>[sequence_length, batch_size, data_point_dim]
                 x_list = {key: value for (key, value) in zip(encoder_inputs, batch_inputs)}
+                #value=>[batch_size, data_point_dim]
                 y_list = {key: value for (key, value) in zip(decoder_inputs, batch_outputs)}
                 x_list.update(y_list);
-                summary, err, _ = session.run([merged, cost, step],x_list)
+                err, _ = session.run([cost, step],x_list)
                 batch_costs.append(err)
             # if summary is not None:
             #     writer.add_summary(summary, i)
-            costs.append(np.average(batch_costs, axis=0))
+            aveErr=np.average(batch_costs, axis=0);
+            print("aveErr>",i,">",aveErr)
+            if(aveErr<0.01):break
+            costs.append(aveErr)
 
-    plt.plot(costs)
-    plt.show()
+        plt.plot(costs)
+        plt.show()
+        for batch_inputs, batch_outputs in zip(inputs, outputs):
+            x_list = {key: value for (key, value) in zip(encoder_inputs, batch_inputs)}
+            #value=>[batch_size, data_point_dim]
+            y_list = {key: value for (key, value) in zip(decoder_inputs, batch_outputs)}
+            x_list.update(y_list);
+            output= session.run([model_outputs],x_list)
+            output=np.array(output)
+            print("output:",output.shape)
+            plt.plot(output[0,:,0,0])
+            batch_outputs=np.array(batch_outputs)
+            print("batch_outputs:",batch_outputs.shape)
+            plt.plot(batch_outputs[:,0,0])
+            plt.show()
+
 
 if __name__ == '__main__':
     main()
