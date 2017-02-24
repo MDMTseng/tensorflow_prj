@@ -44,6 +44,12 @@ def variable_summaries(var, name):
         tf.scalar_summary('min/' + name, tf.reduce_min(var))
         tf.histogram_summary(name, var)
 
+def get_feed( pX, X, pY, Y):
+    feed_dict = {pX[i]: X[i] for i in range(len(X))}
+    feed_dict.update({pY[i]: Y[i] for i in range(len(Y))})
+    return feed_dict
+
+
 
 def main():
     datapoints_number = 1000
@@ -95,8 +101,8 @@ def main():
             for batch_inputs, batch_outputs in zip(inputs, outputs):
                 x_list = {key: value for (key, value) in zip(encoder_inputs, batch_inputs)}
                 y_list = {key: value for (key, value) in zip(decoder_inputs, batch_outputs)}
-
-                summary, err, _ = session.run([merged, cost, step])
+                x_list.update(y_list);
+                summary, err, _ = session.run([merged, cost, step],x_list)
                 batch_costs.append(err)
             # if summary is not None:
             #     writer.add_summary(summary, i)
