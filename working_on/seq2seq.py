@@ -11,23 +11,14 @@ def generate_sequences(batch_num, sequence_length, batch_size):
     x_data = np.random.uniform(0, 1, size=(batch_num, sequence_length, batch_size, 1))
     x_data = np.array(x_data, dtype=np.float32)
 
-    print(x_data.shape)
-    y_data = []
-    for x in x_data:
-        sequence = [x[0]]
-        for index in range(1, len(x)):
-            sequence.append(x[0] * x[index])
-        # sequence.append([np.max(sequence, axis=0)])
-        # candidates_for_min = sequence[1:]
-        # sequence.append([np.min(candidates_for_min, axis=0)])
-        y_data.append(sequence)
-
+    y_data = np.random.uniform(0, 1, size=(batch_num, sequence_length, batch_size, 1))
+    y_data = np.array(y_data, dtype=np.float32)
     return x_data, y_data
 
 def main():
-    sequence_num = 1000
-    sequence_length = 100
-    batch_size = 1000
+    batch_size = 200
+    sequence_num = batch_size
+    sequence_length = 10
     data_point_dim = 1
 
     inputs, outputs = generate_sequences(batch_num=sequence_num//batch_size, sequence_length=sequence_length,
@@ -39,15 +30,18 @@ def main():
     decoder_inputs = [tf.placeholder(tf.float32, shape=[batch_size, data_point_dim]) for _ in range(sequence_length)]
     print("decoder_inputs[:",sequence_length,"].get_shape()>>",decoder_inputs[0].get_shape())
 
+    #cell = tf.nn.rnn_cell.LSTMCell(data_point_dim,use_peepholes=True,state_is_tuple=True)
+    #
+    cell = tf.nn.rnn_cell.BasicLSTMCell(data_point_dim, state_is_tuple=True)
+    cell = tf.nn.rnn_cell.MultiRNNCell( [cell] )
+
     model_outputs, states = seq2seq.basic_rnn_seq2seq(encoder_inputs,
                                                       decoder_inputs,
-                                                      rnn_cell.BasicLSTMCell(data_point_dim, state_is_tuple=True))
+                                                      cell)
 
-    reshaped_outputs = tf.reshape(model_outputs, [-1])
-    reshaped_results = tf.reshape(decoder_inputs, [-1])
+    cost = tf.reduce_mean(tf.squared_difference(model_outputs, decoder_inputs))
 
-    cost = tf.reduce_mean(tf.squared_difference(reshaped_outputs, reshaped_results))
-
+    print("cost.get_shape()>>",cost.get_shape())
     step = tf.train.AdamOptimizer(learning_rate=0.01).minimize(cost)
 
     with tf.Session() as session:
@@ -55,7 +49,7 @@ def main():
         # writer = tf.train.SummaryWriter("/tmp/tensor/train", session.graph, )
 
         costs = []
-        n_iterations = 300
+        n_iterations = 2300
         for i in range(n_iterations):
             batch_costs = []
             for batch_inputs, batch_outputs in zip(inputs, outputs):
@@ -72,7 +66,7 @@ def main():
             #     writer.add_summary(summary, i)
             aveErr=np.average(batch_costs, axis=0);
             print("aveErr>",i,">",aveErr)
-            if(aveErr<0.01):break
+            if(aveErr<0.0005):break
             costs.append(aveErr)
 
         plt.plot(costs)
@@ -84,12 +78,15 @@ def main():
             x_list.update(y_list);
             output= session.run([model_outputs],x_list)
             output=np.array(output)
-            print("output:",output.shape)
-            plt.plot(output[0,:,0,0])
-            batch_outputs=np.array(batch_outputs)
-            print("batch_outputs:",batch_outputs.shape)
-            plt.plot(batch_outputs[:,0,0])
-            plt.show()
+            for i in range(3):
+                print("output:",output.shape)
+                plt.plot(inputs[0,:,i,0], label='inputs')
+                plt.plot(output[0,:,i,0], label='ref_output')
+                batch_outputs=np.array(batch_outputs)
+                print("batch_outputs:",batch_outputs.shape)
+                plt.plot(batch_outputs[:,i,0], label='batch_outputs')
+                plt.legend()
+                plt.show()
 
 
 if __name__ == '__main__':
