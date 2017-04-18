@@ -99,5 +99,5 @@ with tf.Session() as sess:
             nextQ_arr=[]
             e *= 0.99
             printQ(sess,env)
-            print ("episodes: ", i, " ave_r:", ave_r,"% e:",e/10)
+            print ("episodes: ", i, " ave_r:", ave_r/10,"% e:",e)
             ave_r = 0
