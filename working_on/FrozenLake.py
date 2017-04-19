@@ -3,10 +3,25 @@ import gym
 import numpy as np
 import random
 import tensorflow as tf
+from gym.envs.registration import register
 
+register(
+        id='Frozenlake-v3',
+        entry_point='gym.envs.toy_text:FrozenLakeEnv',
+        kwargs={'map_name':'4x4',
+            'is_slippery':False
+            }
+        )
 
-env = gym.make('FrozenLake-v0')
+env = gym.make('Frozenlake-v3')
 tf.reset_default_graph()
+
+
+def lrelu(x, leak=0.2, name="lrelu"):
+     with tf.variable_scope(name):
+         rlx=tf.nn.relu(x);
+         rlnx=tf.nn.relu(-x);
+         return rlx-leak*rlnx
 
 #These lines establish the feed-forward part of the network used to choose actions
 inputs1 = tf.placeholder(shape=[None,16],dtype=tf.float32)
@@ -19,16 +34,16 @@ Ws = [W,B,Wo,Bo];
 L2_reg = [p.assign(p*0.999) for p in Ws]
 L1_reg = [p.assign(p-0.0001*tf.sign(p)) for p in Ws]
 
-H1 = tf.nn.tanh(tf.matmul(inputs1,W)+B)
+H1 = lrelu(tf.matmul(inputs1,W)+B)
 #H2 = tf.nn.relu(tf.matmul(H1,W2)+B2)
-Qout = tf.nn.tanh(tf.matmul(H1,Wo)+Bo)
+Qout = lrelu(tf.matmul(H1,Wo)+Bo)
 
 #Below we obtain the loss by taking the sum of squares difference between the target and prediction Q values.
 nextQ = tf.placeholder(shape=[None,4],dtype=tf.float32)
 loss = tf.reduce_sum(tf.square(nextQ - Qout))
 
 
-updateModel = tf.train.AdamOptimizer(0.001).minimize(loss)
+updateModel = tf.train.AdamOptimizer(0.01).minimize(loss)
 
 
 init = tf.initialize_all_variables()
@@ -43,7 +58,7 @@ def printQ(sess,env):
 
 
 # Set learning parameters
-e = 0.8
+e = 0.1
 num_episodes = 40000
 #create lists to contain total rewards and steps per episode
 ave_r = 0
@@ -62,7 +77,7 @@ with tf.Session() as sess:
         #Choose an action by greedily (with e chance of random action) from the Q-network
         [nQ] = sess.run([Qout],feed_dict={inputs1:[np.identity(16)[ns]]})
         #The Q-Network
-        maxMove = 99
+        maxMove = 30
 
         while j < maxMove:
             j+=1
@@ -71,22 +86,16 @@ with tf.Session() as sess:
 
             if np.random.rand(1) < e:
                 a = env.action_space.sample()
-
             ns,nr,end,_ = env.step(a)
 
-            '''if( j == maxMove or ns == cs):
-                end=True#enough'''
             if( end==True and nr!=1 ) :
                 nr=-1
             nQ = sess.run(Qout,feed_dict={inputs1:[np.identity(16)[ns]]})
             #Obtain maxQ' and set our target value for chosen action.
-            cQ[0,a] += ( nr + 0.8*(np.max(nQ)) - cQ[0,a])
+            cQ[0,a] += 1*( nr + 0.7*(np.max(nQ)) - cQ[0,a])
             #Train our network using target and predicted Q values
             inS1_arr.append(np.identity(16)[cs])
             nextQ_arr.append(cQ[0])
-
-            '''if (i%500 == 0) :
-                env.render()'''
 
             if end == True:
                 if nr == 1 :ave_r +=1
@@ -94,7 +103,7 @@ with tf.Session() as sess:
 
         if i%1000 == 999 :
             _ = sess.run([updateModel],feed_dict={inputs1:inS1_arr,nextQ:nextQ_arr})
-            sess.run([L2_reg,L1_reg])
+            sess.run([L2_reg])
             inS1_arr=[]
             nextQ_arr=[]
             e *= 0.99
