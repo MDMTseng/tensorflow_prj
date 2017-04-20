@@ -23,60 +23,95 @@ def lrelu(x, leak=0.2, name="lrelu"):
          rlnx=tf.nn.relu(-x);
          return rlx-leak*rlnx
 
-#These lines establish the feed-forward part of the network used to choose actions
-state = tf.placeholder(shape=[None,16],dtype=tf.float32)
-W = tf.Variable(tf.random_uniform([16,50],-0.01,0.01))
-B = tf.Variable(tf.random_uniform([50],-0.01,0.01))
-Wo = tf.Variable(tf.random_uniform([50,4],-0.01,0.01))
-Bo = tf.Variable(tf.random_uniform([4],-0.01,0.01))
-
-Ws = [W,B,Wo,Bo];
-L2_reg = [p.assign(p*0.999) for p in Ws]
-L1_reg = [p.assign(p-0.000001*tf.sign(p)) for p in Ws]
-
-H1 = lrelu(tf.matmul(state,W)+B)
-#H2 = tf.nn.relu(tf.matmul(H1,W2)+B2)
-Qout = lrelu(tf.matmul(H1,Wo)+Bo)
-
-#Below we obtain the loss by taking the sum of squares difference between the target and prediction Q values.
-targetQ = tf.placeholder(shape=[None,4],dtype=tf.float32)
-loss = tf.reduce_sum(tf.square(targetQ - Qout))
 
 
+class NNetwork_Obj:
+    train = None
+    output = None
+    Ws = None
+    graph = None
+    def __init__(self,graph,net_input,targetOutput):
+        self.init(graph,net_input,targetOutput)
 
 
-l1_regularizer = tf.contrib.layers.l1_regularizer(scale=0.0001, scope=None)
-regularization_penalty = tf.contrib.layers.apply_regularization(l1_regularizer, Ws)
+    def init(self,graph,net_input,targetOutput):
+        self.graph=graph
+        self.Net_graph(graph,net_input,targetOutput)
+        self.Net_train_graph(graph,net_input,targetOutput)
 
-regularized_loss = loss +regularization_penalty # this loss needs to be minimized
+    def Net_graph(self,graph,net_input,targetOutput):
+        with graph.as_default():
+            input_dim = net_input.shape.as_list()[1];
+            output_dim = targetOutput.shape.as_list()[1];
 
-updateModel = tf.train.RMSPropOptimizer(0.001).minimize(regularized_loss)
+            W = tf.Variable(tf.random_uniform([input_dim,50],-0.01,0.01))
+            B = tf.Variable(tf.random_uniform([50],-0.01,0.01))
+            Wo = tf.Variable(tf.random_uniform([50,output_dim],-0.01,0.01))
+            Bo = tf.Variable(tf.random_uniform([output_dim],-0.01,0.01))
+
+            H1 = lrelu(tf.matmul(net_input,W)+B)
+            #H2 = tf.nn.relu(tf.matmul(H1,W2)+B2)
+            self.output = lrelu(tf.matmul(H1,Wo)+Bo)
+            self.Ws = [W,B,Wo,Bo];
+
+    def Net_train_graph(self,graph,net_input,targetOutput):
+        with graph.as_default():
+            loss = tf.reduce_sum(tf.square(targetOutput - self.output))
+            L2_reg = [p.assign(p*0.999) for p in self.Ws]
+            L1_reg = [p.assign(p-0.000001*tf.sign(p)) for p in self.Ws]
+
+            l1_regularizer = tf.contrib.layers.l1_regularizer(scale=0.0001, scope=None)
+            regularization_penalty = tf.contrib.layers.apply_regularization(l1_regularizer, self.Ws)
+
+            regularized_loss = loss +regularization_penalty # this loss needs to be minimized
+
+            self.train = tf.train.RMSPropOptimizer(0.001).minimize(regularized_loss)
 
 
-init = tf.initialize_all_variables()
+
+graph1 = tf.Graph()
+
+
+class QLearning_OBJ:
+    net_obj = None
+    targetQ_in = None
+    state_in = None
+    net_obj = None
+    def __init__(self):
+        with graph1.as_default():
+            self.state_in = tf.placeholder(shape=[None,16],dtype=tf.float32)
+            self.targetQ_in = tf.placeholder(shape=[None,4],dtype=tf.float32)
+            self.net_obj = NNetwork_Obj(graph1,self.state_in, self.targetQ_in)
+
+    def QNet(self,states):
+        with graph1.as_default():
+            return sess.run([self.net_obj.output],feed_dict={self.state_in:states})
+
+    def training(self,experience):
+        #exp_set={'cs':[],'a':[],'nr':[],'ns':[]};
+        with graph1.as_default():
+            sess.run([self.net_obj.train],feed_dict={self.state_in:inS1_arr,self.targetQ_in:tarQ_arr})
+
+
+    def training(self,states,tarQ_arr):
+        with graph1.as_default():
+            sess.run([self.net_obj.train],feed_dict={self.state_in:states,self.targetQ_in:tarQ_arr})
+
+qobj = QLearning_OBJ()
+
+with graph1.as_default():
+    init = tf.initialize_all_variables()
+
+
+
 
 def printQ(sess,env):
-    Qmap = sess.run([Qout],feed_dict={state:np.identity(16)})
+    Qmap = qobj.QNet(np.identity(16))
     act_map = ['<','V','>','^'];
     print("Qmap>> a=",act_map)
     print(Qmap[0])
     print(np.array([act_map[np.argmax( Qrow)] for Qrow in Qmap[0]]).reshape(4, 4))
     env.render()
-
-
-class Network_Obj:
-    def init(input)
-    def __init__(self,):
-
-
-class QLearning_OBJ:
-    net_obj = null
-    def __init__(self,net_obj):
-        self.net_obj = net_obj
-
-
-
-        
 
 # Set learning parameters
 e = 0.7
@@ -84,7 +119,7 @@ num_episodes = 40000
 #create lists to contain total rewards and steps per episode
 ave_r = 0
 exp_set={'cs':[],'a':[],'nr':[],'ns':[]};
-with tf.Session() as sess:
+with tf.Session(graph=graph1) as sess:
     sess.run(init)
     print("env.action_space>>",env.action_space.__dict__)
     inS1_arr=[];
@@ -97,7 +132,7 @@ with tf.Session() as sess:
 
 
         #Choose an action by greedily (with e chance of random action) from the Q-network
-        [nQ] = sess.run([Qout],feed_dict={state:[np.identity(16)[ns]]})
+        [nQ] =  qobj.QNet([np.identity(16)[ns]])
         #The Q-Network
         maxMove = 30
         nr = 0
@@ -114,8 +149,7 @@ with tf.Session() as sess:
                 end=True
             if( end==True and nr!=1 ) :
                 nr=-1
-            nQ = sess.run(Qout,feed_dict={state:[np.identity(16)[ns]]})
-
+            [nQ] =  qobj.QNet([np.identity(16)[ns]])
 
             #Obtain maxQ' and set our target value for chosen action.
             cQ[0,a] = nr + 0.7*(np.max(nQ))
@@ -132,7 +166,7 @@ with tf.Session() as sess:
                 break
 
         if i%100 == 99 :
-            _ = sess.run([updateModel],feed_dict={state:inS1_arr,targetQ:tarQ_arr})
+            qobj.training(inS1_arr,tarQ_arr)
             #sess.run([L1_reg])
             inS1_arr=[]
             tarQ_arr=[]
