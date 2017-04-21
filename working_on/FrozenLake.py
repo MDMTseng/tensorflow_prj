@@ -54,6 +54,7 @@ class NNetwork_Obj:
             self.output = lrelu(tf.matmul(H1,Wo)+Bo)
             self.Ws = [W,B,Wo,Bo];
 
+
     def Net_train_graph(self,graph,net_input,targetOutput):
         with graph.as_default():
             loss = tf.reduce_sum(tf.square(targetOutput - self.output))
@@ -68,36 +69,61 @@ class NNetwork_Obj:
             self.train = tf.train.RMSPropOptimizer(0.001).minimize(regularized_loss)
 
 
-
-graph1 = tf.Graph()
-
-
 class QLearning_OBJ:
     net_obj = None
     targetQ_in = None
     state_in = None
     net_obj = None
-    def __init__(self):
-        with graph1.as_default():
+    graph = None
+    def __init__(self,graph):
+        self.graph = graph
+        with self.graph.as_default():
+
             self.state_in = tf.placeholder(shape=[None,16],dtype=tf.float32)
             self.targetQ_in = tf.placeholder(shape=[None,4],dtype=tf.float32)
             self.net_obj = NNetwork_Obj(graph1,self.state_in, self.targetQ_in)
 
     def QNet(self,states):
-        with graph1.as_default():
+        with self.graph.as_default():
             return sess.run([self.net_obj.output],feed_dict={self.state_in:states})
 
-    def training(self,experience):
-        #exp_set={'cs':[],'a':[],'nr':[],'ns':[]};
-        with graph1.as_default():
+
+    def Net_exp_train_graph(self):
+        #experiance: cs,a,nr,ns
+        # current state, action, next reward, next state
+        # => current state, Q; next state-> next Q(nQ)
+        # => target Q = nr + gamma*(max(nQ))
+        # => train (current state, target Q)
+        with self.graph.as_default():
+            tar_Q = cQ
+            tar_Q[a] = nr + gamma*(max(nQ))
+            self.training(cs,tar_Q)
+
+
+    def training_exp_replay(self,experience):
+        self.training_exp_replay(experience['cs'],experience['a'],experience['nr'],experience['ns'])
+
+    def training_exp_replay(self,cs_arr,a_arr,nr_arr,ns_arr):
+        # current state, action, next reward, next state
+        # => current state, Q; next state-> next Q(nQ)
+        # => target Q = nr + gamma*(max(nQ))
+        # => train (current state, target Q)
+        with self.graph.as_default():
+
+            cQ = self.QNet(self,cs);
+            nQ = self.QNet(self,ns);
             sess.run([self.net_obj.train],feed_dict={self.state_in:inS1_arr,self.targetQ_in:tarQ_arr})
 
 
     def training(self,states,tarQ_arr):
-        with graph1.as_default():
+        with self.graph.as_default():
             sess.run([self.net_obj.train],feed_dict={self.state_in:states,self.targetQ_in:tarQ_arr})
 
-qobj = QLearning_OBJ()
+
+
+graph1 = tf.Graph()
+
+qobj = QLearning_OBJ(graph1)
 
 with graph1.as_default():
     init = tf.initialize_all_variables()
