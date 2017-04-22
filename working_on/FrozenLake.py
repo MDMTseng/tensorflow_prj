@@ -47,9 +47,9 @@ class NNetwork_Obj:
             input_dim = net_input.shape.as_list()[1];
             output_dim = targetOutput.shape.as_list()[1];
 
-            W = tf.Variable(tf.random_uniform([input_dim,150],-0.01,0.01))
-            B = tf.Variable(tf.random_uniform([150],-0.01,0.01))
-            Wo = tf.Variable(tf.random_uniform([150,output_dim],-0.01,0.01))
+            W = tf.Variable(tf.random_uniform([input_dim,15],-0.01,0.01))
+            B = tf.Variable(tf.random_uniform([15],-0.01,0.01))
+            Wo = tf.Variable(tf.random_uniform([15,output_dim],-0.01,0.01))
             Bo = tf.Variable(tf.random_uniform([output_dim],-0.01,0.01))
 
             H1 = relu(tf.matmul(net_input,W)+B)
@@ -64,12 +64,12 @@ class NNetwork_Obj:
             L2_reg = [p.assign(p*0.999) for p in self.Ws]
             L1_reg = [p.assign(p-0.000001*tf.sign(p)) for p in self.Ws]
 
-            l2_regularizer = tf.contrib.layers.l2_regularizer(scale=0.0001, scope=None)
-            regularization_penalty = tf.contrib.layers.apply_regularization(l2_regularizer, self.Ws)
+            regularizer = tf.contrib.layers.l2_regularizer(scale=0.003, scope=None)
+            regularization_penalty = tf.contrib.layers.apply_regularization(regularizer, self.Ws)
 
             regularized_loss = loss +regularization_penalty  # this loss needs to be minimized
 
-            self.train = tf.train.RMSPropOptimizer(0.0001).minimize(regularized_loss)
+            self.train = tf.train.RMSPropOptimizer(0.001).minimize(regularized_loss)
 
 
 class QLearning_OBJ:
@@ -108,18 +108,16 @@ class QLearning_OBJ:
             [cQ] = self.QNet(cs_arr);
             [nQ] = self.QNet(ns_arr);
             for i in range(len(cQ)):
-                #if nr_arr[i]==1:
                 #print("cs:",cs_arr[i]," a:",a_arr[i]," nr:",nr_arr[i]," ns:",ns_arr[i],"<<<<")
-                cQ[i,a_arr[i]] = nr_arr[i] + 0.8* (np.max(nQ[i]))
-                if(nr_arr[i] !=0):
-                    for j in range(len(cQ[i])):
-                        nQ[i,j]=0
-
-                if( cQ[i,a_arr[i]]< -1 ):
-                    cQ[i,a_arr[i]] = -1
+                cQ[i,a_arr[i]] = nr_arr[i] + 0.5* (np.max(nQ[i]))
 
             sess.run([self.net_obj.train],feed_dict={self.state_in:cs_arr,self.targetQ_in:cQ})
-            sess.run([self.net_obj.train],feed_dict={self.state_in:ns_arr,self.targetQ_in:nQ})
+
+            if(nr_arr[i] !=0):
+                for i in range(len(nQ)):
+                    for j in range(len(nQ[i])):
+                        nQ[i,j]=0
+                sess.run([self.net_obj.train],feed_dict={self.state_in:ns_arr,self.targetQ_in:nQ})
     '''def training_exp_replay(self,cs_arr,a_arr,nr_arr,ns_arr):
         # current state, action, next reward, next state
         # => current state, Q; next state-> next Q(nQ)
@@ -227,7 +225,7 @@ with tf.Session(graph=graph1) as sess:
             ns,nr,end,_ = env.step(a)
             ns_vec = np.identity(16)[ns]
 
-            if( j==maxMove) :
+            if( j==maxMove or cs==ns) :
                 end=True
             if( end==True and nr!=1 ) :
                 nr=-1
