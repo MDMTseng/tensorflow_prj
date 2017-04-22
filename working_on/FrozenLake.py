@@ -6,14 +6,14 @@ import tensorflow as tf
 from gym.envs.registration import register
 
 register(
-        id='Frozenlake-v3',
+        id='FrozenLake-v3',
         entry_point='gym.envs.toy_text:FrozenLakeEnv',
         kwargs={'map_name':'4x4',
             'is_slippery':False
             }
         )
 
-env = gym.make('Frozenlake-v3')
+env = gym.make('FrozenLake-v3')
 tf.reset_default_graph()
 
 
@@ -22,6 +22,9 @@ def lrelu(x, leak=0.2, name="lrelu"):
          rlx=tf.nn.relu(x);
          rlnx=tf.nn.relu(-x);
          return rlx-leak*rlnx
+def relu(x, leak=0.2, name="relu"):
+    with tf.variable_scope(name):
+        return tf.nn.relu(x)
 
 
 
@@ -44,14 +47,14 @@ class NNetwork_Obj:
             input_dim = net_input.shape.as_list()[1];
             output_dim = targetOutput.shape.as_list()[1];
 
-            W = tf.Variable(tf.random_uniform([input_dim,50],-0.01,0.01))
-            B = tf.Variable(tf.random_uniform([50],-0.01,0.01))
-            Wo = tf.Variable(tf.random_uniform([50,output_dim],-0.01,0.01))
+            W = tf.Variable(tf.random_uniform([input_dim,150],-0.01,0.01))
+            B = tf.Variable(tf.random_uniform([150],-0.01,0.01))
+            Wo = tf.Variable(tf.random_uniform([150,output_dim],-0.01,0.01))
             Bo = tf.Variable(tf.random_uniform([output_dim],-0.01,0.01))
 
-            H1 = lrelu(tf.matmul(net_input,W)+B)
+            H1 = relu(tf.matmul(net_input,W)+B)
             #H2 = tf.nn.relu(tf.matmul(H1,W2)+B2)
-            self.output = lrelu(tf.matmul(H1,Wo)+Bo)
+            self.output = tf.nn.tanh(tf.matmul(H1,Wo)+Bo)
             self.Ws = [W,B,Wo,Bo];
 
 
@@ -61,12 +64,12 @@ class NNetwork_Obj:
             L2_reg = [p.assign(p*0.999) for p in self.Ws]
             L1_reg = [p.assign(p-0.000001*tf.sign(p)) for p in self.Ws]
 
-            l1_regularizer = tf.contrib.layers.l1_regularizer(scale=0.0001, scope=None)
-            regularization_penalty = tf.contrib.layers.apply_regularization(l1_regularizer, self.Ws)
+            l2_regularizer = tf.contrib.layers.l2_regularizer(scale=0.01, scope=None)
+            regularization_penalty = tf.contrib.layers.apply_regularization(l2_regularizer, self.Ws)
 
-            regularized_loss = loss +regularization_penalty # this loss needs to be minimized
+            regularized_loss = loss +regularization_penalty  # this loss needs to be minimized
 
-            self.train = tf.train.RMSPropOptimizer(0.001).minimize(regularized_loss)
+            self.train = tf.train.RMSPropOptimizer(0.0001).minimize(regularized_loss)
 
 
 class QLearning_OBJ:
@@ -75,6 +78,10 @@ class QLearning_OBJ:
     state_in = None
     net_obj = None
     graph = None
+
+    exp_set={'cs':[],'a':[],'nr':[],'ns':[]}
+    exp_reward_sum = 0
+
     def __init__(self,graph):
         self.graph = graph
         with self.graph.as_default():
@@ -88,36 +95,74 @@ class QLearning_OBJ:
             return sess.run([self.net_obj.output],feed_dict={self.state_in:states})
 
 
-    def Net_exp_train_graph(self):
-        #experiance: cs,a,nr,ns
-        # current state, action, next reward, next state
-        # => current state, Q; next state-> next Q(nQ)
-        # => target Q = nr + gamma*(max(nQ))
-        # => train (current state, target Q)
-        with self.graph.as_default():
-            tar_Q = cQ
-            tar_Q[a] = nr + gamma*(max(nQ))
-            self.training(cs,tar_Q)
-
-
-    def training_exp_replay(self,experience):
+    def training_exp_replay_set(self,experience):
         self.training_exp_replay(experience['cs'],experience['a'],experience['nr'],experience['ns'])
-
+    ccc = 0
     def training_exp_replay(self,cs_arr,a_arr,nr_arr,ns_arr):
         # current state, action, next reward, next state
         # => current state, Q; next state-> next Q(nQ)
         # => target Q = nr + gamma*(max(nQ))
         # => train (current state, target Q)
+        self.ccc+=1
         with self.graph.as_default():
+            [cQ] = self.QNet(cs_arr);
+            [nQ] = self.QNet(ns_arr);
+            for i in range(len(cQ)):
+                #if nr_arr[i]==1:
+                #print("cs:",cs_arr[i]," a:",a_arr[i]," nr:",nr_arr[i]," ns:",ns_arr[i],"<<<<")
+                cQ[i,a_arr[i]] = nr_arr[i]
+                for j in range(len(cQ[i])):
+                    nQ[i,j]=0
 
-            cQ = self.QNet(self,cs);
-            nQ = self.QNet(self,ns);
-            sess.run([self.net_obj.train],feed_dict={self.state_in:inS1_arr,self.targetQ_in:tarQ_arr})
+                if( cQ[i,a_arr[i]]< -1 ):
+                    cQ[i,a_arr[i]] = -1
 
+            sess.run([self.net_obj.train],feed_dict={self.state_in:cs_arr,self.targetQ_in:cQ})
+            sess.run([self.net_obj.train],feed_dict={self.state_in:ns_arr,self.targetQ_in:nQ})
+    '''def training_exp_replay(self,cs_arr,a_arr,nr_arr,ns_arr):
+        # current state, action, next reward, next state
+        # => current state, Q; next state-> next Q(nQ)
+        # => target Q = nr + gamma*(max(nQ))
+        # => train (current state, target Q)
+        self.ccc+=1
+        with self.graph.as_default():
+            [cQ] = self.QNet(cs_arr);
+            [nQ] = self.QNet(ns_arr);
+            for i in range(len(cQ)):
+                #if nr_arr[i]==1:
+                #print("cs:",cs_arr[i]," a:",a_arr[i]," nr:",nr_arr[i]," ns:",ns_arr[i],"<<<<")
+                cQ[i,a_arr[i]] = nr_arr[i] + 0.95* (np.max(nQ[i]))
+                if( cQ[i,a_arr[i]]< -1 ):
+                    cQ[i,a_arr[i]] = -1
+            if self.ccc%100 ==0:
+                for i in range(len(cQ)):
+                    print("cs:",np.argmax( cs_arr[i])," cQ:",cQ[i])
+            sess.run([self.net_obj.train],feed_dict={self.state_in:cs_arr,self.targetQ_in:cQ})
+            sess.run([self.net_obj.train],feed_dict={self.state_in:cs_arr,self.targetQ_in:cQ})'''
 
     def training(self,states,tarQ_arr):
         with self.graph.as_default():
             sess.run([self.net_obj.train],feed_dict={self.state_in:states,self.targetQ_in:tarQ_arr})
+
+
+
+    def experience_append(self,cs,a,nr,ns):
+        if self.exp_reward_sum+nr > -5 and len(self.exp_set['cs']) <500:
+            self.exp_reward_sum += nr
+            self.exp_set['cs'].append(cs)
+            self.exp_set[ 'a'].append(a)
+            self.exp_set['nr'].append(nr)
+            self.exp_set['ns'].append(ns)
+        else:
+            idx = 0
+            while True:
+                idx = np.random.randint(len(self.exp_set[ 'cs']))
+                if self.exp_set[ 'nr'][idx] == nr:
+                    break
+            self.exp_set[ 'cs'][idx] = cs
+            self.exp_set[ 'a'][idx] = a
+            self.exp_set[ 'nr'][idx] = nr
+            self.exp_set[ 'ns'][idx] = ns
 
 
 
@@ -144,7 +189,11 @@ e = 0.7
 num_episodes = 40000
 #create lists to contain total rewards and steps per episode
 ave_r = 0
-exp_set={'cs':[],'a':[],'nr':[],'ns':[]};
+
+
+
+
+
 with tf.Session(graph=graph1) as sess:
     sess.run(init)
     print("env.action_space>>",env.action_space.__dict__)
@@ -158,45 +207,47 @@ with tf.Session(graph=graph1) as sess:
 
 
         #Choose an action by greedily (with e chance of random action) from the Q-network
-        [nQ] =  qobj.QNet([np.identity(16)[ns]])
+        ns_vec = np.identity(16)[ns]
+        [nQ] =  qobj.QNet([ns_vec])
         #The Q-Network
         maxMove = 30
         nr = 0
         while j < maxMove:
             j+=1
             cs,cQ,a,cr = ns,nQ,np.argmax(nQ),nr
+            cs_vec = ns_vec
             #print(cs)
 
             if np.random.rand(1) < e:
                 a = env.action_space.sample()
             ns,nr,end,_ = env.step(a)
+            ns_vec = np.identity(16)[ns]
 
-            if( j==maxMove and ns==cs ) :
+            if( j==maxMove or ns==cs) :
                 end=True
             if( end==True and nr!=1 ) :
                 nr=-1
-            [nQ] =  qobj.QNet([np.identity(16)[ns]])
+            [nQ] =  qobj.QNet([ns_vec])
 
             #Obtain maxQ' and set our target value for chosen action.
-            cQ[0,a] = nr + 0.7*(np.max(nQ))
+            cQ[0,a] = nr + 0.2*(np.max(nQ))
             #Train our network using target and predicted Q values
-            inS1_arr.append(np.identity(16)[cs])
+            inS1_arr.append(cs_vec)
             tarQ_arr.append(cQ[0])
 
+
             if end == True:
-                exp_set['cs'].append(cs)
-                exp_set[ 'a'].append(a)
-                exp_set['nr'].append(cr)
-                exp_set['ns'].append(ns)
+                qobj.experience_append(cs_vec,a,nr,ns_vec)
                 if nr == 1 :ave_r +=1
+                qobj.training_exp_replay_set(qobj.exp_set)
                 break
 
         if i%100 == 99 :
-            qobj.training(inS1_arr,tarQ_arr)
+            #qobj.training(inS1_arr,tarQ_arr)
             #sess.run([L1_reg])
             inS1_arr=[]
             tarQ_arr=[]
-            e *= 0.95
+            e *= 0.8
             printQ(sess,env)
-            print ("episodes: ", i, " ave_r:", ave_r/10,"% e:",e)
+            print ("episodes: ", i, " ave_r:", ave_r,"% e:",e, " exp_reward_sum:",qobj.exp_reward_sum," len(exp):",len(qobj.exp_set['nr']))
             ave_r = 0
