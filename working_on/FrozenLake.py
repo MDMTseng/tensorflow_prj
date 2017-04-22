@@ -6,14 +6,14 @@ import tensorflow as tf
 from gym.envs.registration import register
 
 register(
-        id='FrozenLake-v3',
+        id='FrozenLake-v1',
         entry_point='gym.envs.toy_text:FrozenLakeEnv',
         kwargs={'map_name':'4x4',
             'is_slippery':False
             }
         )
 
-env = gym.make('FrozenLake-v3')
+env = gym.make('FrozenLake-v1')
 tf.reset_default_graph()
 
 
@@ -64,7 +64,7 @@ class NNetwork_Obj:
             L2_reg = [p.assign(p*0.999) for p in self.Ws]
             L1_reg = [p.assign(p-0.000001*tf.sign(p)) for p in self.Ws]
 
-            l2_regularizer = tf.contrib.layers.l2_regularizer(scale=0.01, scope=None)
+            l2_regularizer = tf.contrib.layers.l2_regularizer(scale=0.0001, scope=None)
             regularization_penalty = tf.contrib.layers.apply_regularization(l2_regularizer, self.Ws)
 
             regularized_loss = loss +regularization_penalty  # this loss needs to be minimized
@@ -110,9 +110,10 @@ class QLearning_OBJ:
             for i in range(len(cQ)):
                 #if nr_arr[i]==1:
                 #print("cs:",cs_arr[i]," a:",a_arr[i]," nr:",nr_arr[i]," ns:",ns_arr[i],"<<<<")
-                cQ[i,a_arr[i]] = nr_arr[i]
-                for j in range(len(cQ[i])):
-                    nQ[i,j]=0
+                cQ[i,a_arr[i]] = nr_arr[i] + 0.8* (np.max(nQ[i]))
+                if(nr_arr[i] !=0):
+                    for j in range(len(cQ[i])):
+                        nQ[i,j]=0
 
                 if( cQ[i,a_arr[i]]< -1 ):
                     cQ[i,a_arr[i]] = -1
@@ -147,18 +148,22 @@ class QLearning_OBJ:
 
 
     def experience_append(self,cs,a,nr,ns):
-        if self.exp_reward_sum+nr > -5 and len(self.exp_set['cs']) <500:
-            self.exp_reward_sum += nr
+        self.exp_reward_sum += nr
+        if len(self.exp_set['cs']) <500:
             self.exp_set['cs'].append(cs)
             self.exp_set[ 'a'].append(a)
             self.exp_set['nr'].append(nr)
             self.exp_set['ns'].append(ns)
         else:
             idx = 0
-            while True:
-                idx = np.random.randint(len(self.exp_set[ 'cs']))
-                if self.exp_set[ 'nr'][idx] == nr:
+            idx = np.random.randint(len(self.exp_set[ 'cs']))
+            while self.exp_set[ 'nr'][idx] == 1:
+                if np.random.rand(1) <0.1:
                     break
+                idx = np.random.randint(len(self.exp_set[ 'cs']))
+
+
+            self.exp_reward_sum -=self.exp_set[ 'nr'][idx]
             self.exp_set[ 'cs'][idx] = cs
             self.exp_set[ 'a'][idx] = a
             self.exp_set[ 'nr'][idx] = nr
@@ -197,8 +202,6 @@ ave_r = 0
 with tf.Session(graph=graph1) as sess:
     sess.run(init)
     print("env.action_space>>",env.action_space.__dict__)
-    inS1_arr=[];
-    tarQ_arr=[];
     for i in range(num_episodes):
         #Reset environment and get first new observation
         ns = env.reset()
@@ -217,24 +220,21 @@ with tf.Session(graph=graph1) as sess:
             cs,cQ,a,cr = ns,nQ,np.argmax(nQ),nr
             cs_vec = ns_vec
             #print(cs)
-
             if np.random.rand(1) < e:
                 a = env.action_space.sample()
+
+
             ns,nr,end,_ = env.step(a)
             ns_vec = np.identity(16)[ns]
 
-            if( j==maxMove or ns==cs) :
+            if( j==maxMove) :
                 end=True
             if( end==True and nr!=1 ) :
                 nr=-1
             [nQ] =  qobj.QNet([ns_vec])
 
-            #Obtain maxQ' and set our target value for chosen action.
-            cQ[0,a] = nr + 0.2*(np.max(nQ))
-            #Train our network using target and predicted Q values
-            inS1_arr.append(cs_vec)
-            tarQ_arr.append(cQ[0])
-
+            if np.random.rand(1) <0.1:
+                qobj.experience_append(cs_vec,a,nr,ns_vec)
 
             if end == True:
                 qobj.experience_append(cs_vec,a,nr,ns_vec)
@@ -243,11 +243,7 @@ with tf.Session(graph=graph1) as sess:
                 break
 
         if i%100 == 99 :
-            #qobj.training(inS1_arr,tarQ_arr)
-            #sess.run([L1_reg])
-            inS1_arr=[]
-            tarQ_arr=[]
-            e *= 0.8
+            e *= 0.9
             printQ(sess,env)
             print ("episodes: ", i, " ave_r:", ave_r,"% e:",e, " exp_reward_sum:",qobj.exp_reward_sum," len(exp):",len(qobj.exp_set['nr']))
             ave_r = 0
