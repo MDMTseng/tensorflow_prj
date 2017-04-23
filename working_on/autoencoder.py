@@ -27,10 +27,15 @@ display_step = 1
 examples_to_show = 10
 
 # Network Parameters
-n_hidden_1 = 70 # 1st layer num features
-n_hidden_2 = 70 # 2nd layer num features
+n_hidden_1 = 350 # 1st layer num features
+n_hidden_2 = 50 # 2nd layer num features
 n_input = 784 # MNIST data input (img shape: 28*28)
 
+def lrelu(x, leak=0.2, name="lrelu"):
+     with tf.variable_scope(name):
+         rlx=tf.nn.relu(x);
+         rlnx=tf.nn.relu(-x);
+         return rlx-leak*rlnx
 # tf Graph input (only pictures)
 X = tf.placeholder("float", [None, n_input])
 
@@ -51,10 +56,10 @@ biases = {
 # Building the encoder
 def encoder(x):
     # Encoder Hidden layer with sigmoid activation #1
-    layer_1 = tf.nn.sigmoid(tf.add(tf.matmul(x, weights['encoder_h1']),
+    layer_1 = lrelu(tf.add(tf.matmul(x, weights['encoder_h1']),
                                    biases['encoder_b1']))
     # Decoder Hidden layer with sigmoid activation #2
-    layer_2 = tf.nn.sigmoid(tf.add(tf.matmul(layer_1, weights['encoder_h2']),
+    layer_2 = lrelu(tf.add(tf.matmul(layer_1, weights['encoder_h2']),
                                    biases['encoder_b2']))
     return layer_2
 
@@ -62,7 +67,7 @@ def encoder(x):
 # Building the decoder
 def decoder(x):
     # Encoder Hidden layer with sigmoid activation #1
-    layer_1 = tf.nn.sigmoid(tf.add(tf.matmul(x, weights['decoder_h1']),
+    layer_1 = lrelu(tf.add(tf.matmul(x, weights['decoder_h1']),
                                    biases['decoder_b1']))
     # Decoder Hidden layer with sigmoid activation #2
     layer_2 = tf.nn.sigmoid(tf.add(tf.matmul(layer_1, weights['decoder_h2']),
@@ -80,8 +85,12 @@ y_true = X
 
 # Define loss and optimizer, minimize the squared error
 cost = tf.reduce_mean(tf.pow(y_true - y_pred, 2))
-rate_X = tf.train.exponential_decay(learning_rate, cost, 1, 0.80)
-optimizer = tf.train.RMSPropOptimizer(rate_X).minimize(cost)
+
+regularizer = tf.contrib.layers.l1_regularizer(scale=0.01, scope=None)
+L1_reg_penalty = tf.contrib.layers.apply_regularization(regularizer, [weights['encoder_h2'], biases['encoder_b2']])
+regularizer = tf.contrib.layers.l2_regularizer(scale=0.0001, scope=None)
+L2_reg_penalty = tf.contrib.layers.apply_regularization(regularizer, [weights['encoder_h2'], biases['encoder_b2'],weights['decoder_h2'], biases['decoder_b2']   ])
+optimizer = tf.train.AdamOptimizer(0.01).minimize(cost + L1_reg_penalty + L2_reg_penalty)
 
 # Initializing the variables
 init = tf.global_variables_initializer()

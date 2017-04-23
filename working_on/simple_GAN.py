@@ -101,11 +101,11 @@ with tf.name_scope('GD'):
         #G_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D_logit_fake, labels=tf.ones_like(D_logit_fake)))
         G_loss =-tf.reduce_mean(D_logit_fake);
         variable_summaries(G_loss)
-    rate_g = tf.train.exponential_decay(learning_rate, G_loss, 1, 0.99)
     # Gradient descent
     theta_G = [v for v in tf.global_variables() if "G_WS/G_" in v.name]
     [print(v.name) for v in theta_G]
-    G_solver = tf.train.RMSPropOptimizer(rate_g).minimize(G_loss, var_list=theta_G)
+
+    G_solver = tf.train.RMSPropOptimizer(0.001).minimize(G_loss, var_list=theta_G)
 
 with tf.name_scope('D'):
     with tf.name_scope('D_loss'):
@@ -114,10 +114,13 @@ with tf.name_scope('D'):
         #D_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D_logit_fake, labels=tf.zeros_like(D_logit_fake)))
         #D_loss = D_loss_real + D_loss_fake
         D_loss = tf.reduce_mean(D_logit_real) - tf.reduce_mean(D_logit_fake)
-    rate_D = tf.train.exponential_decay(learning_rate, D_loss, 1, 0.98)
     theta_D = [v for v in tf.global_variables() if "D_WS/D_" in v.name]
     [print(v.name) for v in theta_D]
-    D_solver = tf.train.RMSPropOptimizer(rate_D).minimize(-D_loss, var_list=theta_D)
+
+
+    regularizer = tf.contrib.layers.l2_regularizer(scale=0.01, scope=None)
+    D_reg_penalty = tf.contrib.layers.apply_regularization(regularizer, theta_D)
+    D_solver = tf.train.RMSPropOptimizer(0.001).minimize(-D_loss, var_list=theta_D)
     # theta_D is list of D's params
     clip_D_WS = [p.assign(tf.clip_by_value(p, -0.1, 0.1)) for p in theta_D]
 
