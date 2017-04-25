@@ -2,7 +2,7 @@ import tensorflow as tf
 import gym
 
 stddev = 1.0
-render = True
+render = False
 render_skip = 5
 monitor = False
 
@@ -16,6 +16,10 @@ x = tf.placeholder(tf.float32, shape=[None, 4])
 y = tf.cast(tf.less_equal(0.0, tf.matmul(x, current_weights)), tf.int32)
 
 env = gym.make('CartPole-v0')
+
+print("env.action_space>>",env.action_space.__dict__)
+print("env.observation_space>>",env.observation_space.__dict__)
+
 if monitor:
   env = gym.wrappers.Monitor(env, '/tmp/cartpole-experiment-1', force=True)
 observation = env.reset()

@@ -5,15 +5,8 @@ import random
 import tensorflow as tf
 from gym.envs.registration import register
 
-register(
-        id='FrozenLake-v1',
-        entry_point='gym.envs.toy_text:FrozenLakeEnv',
-        kwargs={'map_name':'4x4',
-            'is_slippery':False
-            }
-        )
 
-env = gym.make('FrozenLake-v0')
+env = gym.make('CartPole-v0')
 tf.reset_default_graph()
 
 
@@ -80,12 +73,12 @@ class QLearning_OBJ:
     graph = None
 
 
-    def __init__(self,graph):
+    def __init__(self,graph,inDim,OutDim):
         self.graph = graph
         with self.graph.as_default():
 
-            self.state_in = tf.placeholder(shape=[None,16],dtype=tf.float32)
-            self.targetQ_in = tf.placeholder(shape=[None,4],dtype=tf.float32)
+            self.state_in = tf.placeholder(shape=[None,inDim],dtype=tf.float32)
+            self.targetQ_in = tf.placeholder(shape=[None,OutDim],dtype=tf.float32)
             self.net_obj = NNetwork_Obj(graph1,self.state_in, self.targetQ_in)
 
     def QNet(self,states):
@@ -150,7 +143,9 @@ class QLearning_OBJ:
 
 graph1 = tf.Graph()
 
-qobj = QLearning_OBJ(graph1)
+print("env.action_space>>",env.action_space.__dict__)
+print("env.observation_space>>",env.observation_space.low.shape[0])
+qobj = QLearning_OBJ(graph1,env.observation_space.low.shape[0],env.action_space.n)
 
 with graph1.as_default():
     init = tf.initialize_all_variables()
@@ -159,12 +154,12 @@ with graph1.as_default():
 
 
 def printQ(sess,env):
-    Qmap = qobj.QNet(np.identity(16))
+    '''Qmap = qobj.QNet(np.identity(16))
     act_map = ['<','V','>','^'];
     print("Qmap>> a=",act_map)
     print(Qmap[0])
     print(np.array([act_map[np.argmax( Qrow)] for Qrow in Qmap[0]]).reshape(4, 4))
-    env.render()
+    env.render()'''
 
 # Set learning parameters
 e = 0.7
@@ -187,10 +182,10 @@ with tf.Session(graph=graph1) as sess:
 
 
         #Choose an action by greedily (with e chance of random action) from the Q-network
-        ns_vec = np.identity(16)[ns]
+        ns_vec = ns
         [nQ] =  qobj.QNet([ns_vec])
         #The Q-Network
-        maxMove = 30
+        maxMove = 300
         nr = 0
         while j < maxMove:
             j+=1
@@ -202,20 +197,16 @@ with tf.Session(graph=graph1) as sess:
 
 
             ns,nr,end,_ = env.step(a)
-            ns_vec = np.identity(16)[ns]
-
-            if( j==maxMove ) :
-                end=True
-            if( end==True and nr!=1 ) :
-                nr=-1
+            ns_vec = ns
+            print(nr)
             [nQ] =  qobj.QNet([ns_vec])
-
+            qobj.training_exp_replay([cs_vec],[a],[nr],[ns_vec])
             qobj.experience_append(cs_vec,a,nr,ns_vec)
 
             if end == True:
                 if nr == 1 :ave_r +=1
                 break
-
+        print("======")
         if i%100 == 99 :
             qobj.training_exp_replay_set(qobj.exp_set)
             e *= 0.9
