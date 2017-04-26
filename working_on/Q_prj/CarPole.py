@@ -57,7 +57,7 @@ class NNetwork_Obj:
             L2_reg = [p.assign(p*0.999) for p in self.Ws]
             L1_reg = [p.assign(p-0.000001*tf.sign(p)) for p in self.Ws]
 
-            regularizer = tf.contrib.layers.l2_regularizer(scale=0.001, scope=None)
+            regularizer = tf.contrib.layers.l2_regularizer(scale=0.01, scope=None)
             regularization_penalty = tf.contrib.layers.apply_regularization(regularizer, self.Ws)
 
             regularized_loss = loss +regularization_penalty  # this loss needs to be minimized
@@ -99,7 +99,7 @@ class QLearning_OBJ:
             [nQ] = self.QNet(ns_arr);
             for i in range(len(cQ)):
                 #print("cs:",cs_arr[i]," a:",a_arr[i]," nr:",nr_arr[i]," ns:",ns_arr[i],"<<<<")
-                cQ[i,a_arr[i]] = nr_arr[i] + 0.2* (np.max(nQ[i]))
+                cQ[i,a_arr[i]] = nr_arr[i] + 0.7* (np.max(nQ[i]))
 
             #for iii in range(len(cQ)):print(cQ[iii], "<><><", np.argmax( cs_arr[iii]))
             sess.run([self.net_obj.train],feed_dict={self.state_in:cs_arr,self.targetQ_in:cQ})
@@ -124,20 +124,12 @@ class QLearning_OBJ:
             self.exp_set['nr'].append(nr)
             self.exp_set['ns'].append(ns)
         else:
-            most_r = np.argmax( self.rewardHist) - self.rewardHist_offset#find the exp that we had most
-
-            self.rewardHist[int(most_r+self.rewardHist_offset)]-=1
             idx = np.random.randint(len(self.exp_set[ 'cs']))
-            while self.exp_set[ 'nr'][idx] != most_r:
-                idx = np.random.randint(len(self.exp_set[ 'cs']))
-
             self.exp_set[ 'cs'][idx] = cs
             self.exp_set[ 'a'][idx] = a
             self.exp_set[ 'nr'][idx] = nr
             self.exp_set[ 'ns'][idx] = ns
 
-
-        self.rewardHist[int(nr+self.rewardHist_offset)]+=1
 
 
 
@@ -187,6 +179,7 @@ with tf.Session(graph=graph1) as sess:
         #The Q-Network
         maxMove = 300
         nr = 0
+        acc_nr =0
         while j < maxMove:
             j+=1
             cs,cQ,a,cr = ns,nQ,np.argmax(nQ),nr
@@ -197,17 +190,26 @@ with tf.Session(graph=graph1) as sess:
 
 
             ns,nr,end,_ = env.step(a)
-            ns_vec = ns
-            print(nr)
-            [nQ] =  qobj.QNet([ns_vec])
-            qobj.training_exp_replay([cs_vec],[a],[nr],[ns_vec])
-            qobj.experience_append(cs_vec,a,nr,ns_vec)
 
+            acc_nr +=1
+
+
+            ns_vec = ns
+            [nQ] =  qobj.QNet([ns_vec])
             if end == True:
-                if nr == 1 :ave_r +=1
+                qobj.training_exp_replay([cs_vec],[a],[-1],[ns_vec])
+                qobj.experience_append(cs_vec,a,-1,ns_vec)
+            else:
+                qobj.training_exp_replay([cs_vec],[a],[1],[ns_vec])
+                qobj.experience_append(cs_vec,a,1,ns_vec)
+
+            if i%100 == 99 :
+                print(nQ)
+                env.render()
+            if end == True:
                 break
         print("======")
-        if i%100 == 99 :
+        if i%30 == 29 :
             qobj.training_exp_replay_set(qobj.exp_set)
             e *= 0.9
             printQ(sess,env)
