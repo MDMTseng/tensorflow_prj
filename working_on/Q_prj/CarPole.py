@@ -40,9 +40,9 @@ class NNetwork_Obj:
             input_dim = net_input.shape.as_list()[1];
             output_dim = targetOutput.shape.as_list()[1];
 
-            W = tf.Variable(tf.random_uniform([input_dim,150],-0.01,0.01))
-            B = tf.Variable(tf.random_uniform([150],-0.01,0.01))
-            Wo = tf.Variable(tf.random_uniform([150,output_dim],-0.01,0.01))
+            W = tf.Variable(tf.random_uniform([input_dim,50],-0.01,0.01))
+            B = tf.Variable(tf.random_uniform([50],-0.01,0.01))
+            Wo = tf.Variable(tf.random_uniform([50,output_dim],-0.01,0.01))
             Bo = tf.Variable(tf.random_uniform([output_dim],-0.01,0.01))
 
             H1 = tf.nn.relu(tf.matmul(net_input,W)+B)
@@ -227,12 +227,12 @@ with tf.Session(graph=graph1) as sess:
                 #env.render()
             if end == True:
                 ccc=0
+                margin = 5
                 for exp in exp_x:
                     rw = 0
-                    if(ccc == acc_nr-1):
+                    if(ccc > acc_nr-margin):
                         rw=-1
-                    elif(acc_nr>40 and ccc < acc_nr/2 ):
-                    #elif(np.absolute(exp['ns'][3])<0.5 and np.absolute(exp['ns'][2])<0.005 ):#CHEATING
+                    elif(ccc < acc_nr/2-margin):
                         rw = 1
                     qobj.experience_append(exp['s'],exp['a'],rw,exp['ns'])
                     ccc+=1
