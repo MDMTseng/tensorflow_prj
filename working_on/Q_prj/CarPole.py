@@ -10,14 +10,14 @@ env = gym.make('CartPole-v0')
 tf.reset_default_graph()
 
 
-def lrelu(x, leak=0.2, name="lrelu"):
-     with tf.variable_scope(name):
-         rlx=tf.nn.relu(x);
-         rlnx=tf.nn.relu(-x);
-         return rlx-leak*rlnx
+def lrelu(x, leak=0.1, name="lrelu"):
+     rlx=leak*x + (1-leak)*tf.nn.relu(x);
+     return rlx
 def relu(x, name="relu"):
     with tf.variable_scope(name):
         return tf.nn.relu(x)
+def tanh(x):
+       return tf.nn.tanh(x)
 
 
 
@@ -35,6 +35,21 @@ class NNetwork_Obj:
         self.Net_graph(graph,net_input,targetOutput)
         self.Net_train_graph(graph,net_input,targetOutput)
 
+    def Net_graph_(self,graph,net_input,targetOutput):
+        with graph.as_default():
+            input_dim = net_input.shape.as_list()[1];
+            output_dim = targetOutput.shape.as_list()[1];
+
+            W = tf.Variable(tf.random_uniform([input_dim,150],-0.01,0.01))
+            B = tf.Variable(tf.random_uniform([150],-0.01,0.01))
+
+            Wo = tf.Variable(tf.random_uniform([150,output_dim],-0.01,0.01))
+            Bo = tf.Variable(tf.random_uniform([output_dim],-0.01,0.01))
+
+            H1 = tf.nn.relu(tf.matmul(net_input,W)+B)
+            #H2 = tf.nn.relu(tf.matmul(H1,W2)+B2)
+            self.output = tf.nn.tanh(tf.matmul(H1,Wo)+Bo)
+            self.Ws = [W,B,Wo,Bo];
     def Net_graph(self,graph,net_input,targetOutput):
         with graph.as_default():
             input_dim = net_input.shape.as_list()[1];
@@ -42,13 +57,20 @@ class NNetwork_Obj:
 
             W = tf.Variable(tf.random_uniform([input_dim,50],-0.01,0.01))
             B = tf.Variable(tf.random_uniform([50],-0.01,0.01))
+
+
             Wo = tf.Variable(tf.random_uniform([50,output_dim],-0.01,0.01))
             Bo = tf.Variable(tf.random_uniform([output_dim],-0.01,0.01))
 
-            H1 = tf.nn.relu(tf.matmul(net_input,W)+B)
+            H1_val = tf.matmul(net_input,W)+B
+
+            H1 = lrelu(H1_val)
             #H2 = tf.nn.relu(tf.matmul(H1,W2)+B2)
-            self.output = tf.nn.tanh(tf.matmul(H1,Wo)+Bo)
+            output = (tf.matmul(H1,Wo)+Bo)
+
+            self.output = tanh(output)
             self.Ws = [W,B,Wo,Bo];
+
 
 
     def Net_train_graph(self,graph,net_input,targetOutput):
@@ -57,7 +79,7 @@ class NNetwork_Obj:
             L2_reg = [p.assign(p*0.999) for p in self.Ws]
             L1_reg = [p.assign(p-0.000001*tf.sign(p)) for p in self.Ws]
 
-            regularizer = tf.contrib.layers.l2_regularizer(scale=0.01, scope=None)
+            regularizer = tf.contrib.layers.l2_regularizer(scale=0.001, scope=None)
             regularization_penalty = tf.contrib.layers.apply_regularization(regularizer, self.Ws)
 
             regularized_loss = loss +regularization_penalty  # this loss needs to be minimized
@@ -95,13 +117,13 @@ class QLearning_OBJ:
         # => target Q = nr + gamma*(max(nQ))
         # => train (current state, target Q)
         alpha = 0.7
-        gamma = 0.3
+        gamma = 0.99
         with self.graph.as_default():
             [cQ] = self.QNet(cs_arr);
             [nQ] = self.QNet(ns_arr);
             for i in range(len(cQ)):
                 #print("cs:",cs_arr[i]," a:",a_arr[i]," nr:",nr_arr[i]," ns:",ns_arr[i],"<<<<")
-                cQ[i,a_arr[i]] = cQ[i,a_arr[i]]+alpha*( nr_arr[i] + gamma* (np.max(nQ[i])) -cQ[i,a_arr[i]])
+                cQ[i,a_arr[i]] = nr_arr[i] + gamma* np.max(nQ[i])
 
             #for iii in range(len(cQ)):print(cQ[iii], "<><><", np.argmax( cs_arr[iii]))
             sess.run([self.net_obj.train],feed_dict={self.state_in:cs_arr,self.targetQ_in:cQ})
@@ -115,7 +137,7 @@ class QLearning_OBJ:
         with self.graph.as_default():
             sess.run([self.net_obj.train],feed_dict={self.state_in:states,self.targetQ_in:tarQ_arr})
 
-    experience_limit=300
+    experience_limit=500
     def experience_append(self,cs,a,nr,ns):
 
         if len(self.exp_set['cs']) <self.experience_limit:
@@ -189,6 +211,7 @@ with tf.Session(graph=graph1) as sess:
     sess.run(init)
     print("env.action_space>>",env.action_space.__dict__)
 
+    acc_nr =0
     for i in range(num_episodes):
         #Reset environment and get first new observation
         ns = env.reset()
@@ -200,9 +223,8 @@ with tf.Session(graph=graph1) as sess:
         ns_vec = ns
         [nQ] =  qobj.QNet([ns_vec])
         #The Q-Network
-        maxMove = 1200
+        maxMove = 200
         nr = 0
-        acc_nr =0
 
         exp_x=[]
         while j < maxMove:
@@ -222,17 +244,18 @@ with tf.Session(graph=graph1) as sess:
 
             exp_x.append({'s':cs_vec,'a':a,'ns':ns_vec})
 
-            if i%1000 == 999 :
-                printQ(sess,env,ns_vec,nQ)
-                #env.render()
+            if i%100 == 99 :
+                #printQ(sess,env,ns_vec,nQ)
+                env.render()
             if end == True:
+                turn_lifeTime=j
                 ccc=0
-                margin = 5
+                margin = turn_lifeTime/10+2
                 for exp in exp_x:
                     rw = 0
-                    if(ccc > acc_nr-margin):
+                    if(turn_lifeTime!=200 and ccc > turn_lifeTime-margin):
                         rw=-1
-                    elif(ccc < acc_nr/2-margin):
+                    elif(ccc < turn_lifeTime/2-margin):
                         rw = 1
                     qobj.experience_append(exp['s'],exp['a'],rw,exp['ns'])
                     ccc+=1
@@ -242,6 +265,7 @@ with tf.Session(graph=graph1) as sess:
 
 
         if i%30 == 29 :
-            e = (e-0.2)*0.99+0.2
-            print ("episodes: ", i, " acc_nr:", acc_nr,"% e:",e, "rewardHist:",qobj.rewardHist, " len(exp):",len(qobj.exp_set['nr']))
+            e = (e-0.0)*0.99+0.0
+            print ("episodes: ", i, " acc_nr:", "%3.2f"% (100.0*acc_nr/(maxMove*30)),"% e:",e, "rewardHist:",qobj.rewardHist)
             ave_r = 0
+            acc_nr =0

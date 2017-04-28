@@ -57,7 +57,12 @@ with tf.name_scope('G_WS'):
 def generator(z,name='generator'):
     with tf.name_scope(name):
         G_h1 = tf.nn.tanh(tf.matmul(z, G_W1) + G_b1)
-        G_h2 = tf.nn.tanh(tf.matmul(G_h1, G_W1x) + G_b1x)
+        G_h2 = tf.matmul(G_h1, G_W1x) + G_b1x
+
+        G_h2 = tf.nn.tanh(tf.contrib.layers.batch_norm(G_h2,
+                                                  center=True, scale=True,
+                                                  is_training=True,
+                                                  scope='bn'))
         G_log_prob = tf.matmul(G_h2, G_W2) + G_b2
         G_prob = tf.nn.sigmoid(G_log_prob)
         variable_summaries(G_prob)
@@ -105,7 +110,9 @@ with tf.name_scope('GD'):
     theta_G = [v for v in tf.global_variables() if "G_WS/G_" in v.name]
     [print(v.name) for v in theta_G]
 
-    G_solver = tf.train.RMSPropOptimizer(0.001).minimize(G_loss, var_list=theta_G)
+    regularizer = tf.contrib.layers.l2_regularizer(scale=0.01, scope=None)
+    G_reg_penalty = tf.contrib.layers.apply_regularization(regularizer, theta_G)
+    G_solver = tf.train.RMSPropOptimizer(0.001).minimize(G_loss+G_reg_penalty, var_list=theta_G)
 
 with tf.name_scope('D'):
     with tf.name_scope('D_loss'):
@@ -120,7 +127,7 @@ with tf.name_scope('D'):
 
     regularizer = tf.contrib.layers.l2_regularizer(scale=0.01, scope=None)
     D_reg_penalty = tf.contrib.layers.apply_regularization(regularizer, theta_D)
-    D_solver = tf.train.RMSPropOptimizer(0.001).minimize(-D_loss, var_list=theta_D)
+    D_solver = tf.train.RMSPropOptimizer(0.001).minimize(-D_loss+D_reg_penalty, var_list=theta_D)
     # theta_D is list of D's params
     clip_D_WS = [p.assign(tf.clip_by_value(p, -0.1, 0.1)) for p in theta_D]
 
