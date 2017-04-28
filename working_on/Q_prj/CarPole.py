@@ -139,7 +139,8 @@ class QLearning_OBJ:
 
     experience_limit=500
     def experience_append(self,cs,a,nr,ns):
-
+        if np.random.rand(1) < 0.1:
+            return
         if len(self.exp_set['cs']) <self.experience_limit:
             self.exp_set['cs'].append(cs)
             self.exp_set[ 'a'].append(a)
@@ -253,7 +254,7 @@ with tf.Session(graph=graph1) as sess:
                 margin = turn_lifeTime/10+2
                 for exp in exp_x:
                     rw = 0
-                    if(turn_lifeTime!=200 and ccc > turn_lifeTime-margin):
+                    if(turn_lifeTime<195 and ccc > turn_lifeTime-margin):
                         rw=-1
                     elif(ccc < turn_lifeTime/2-margin):
                         rw = 1
