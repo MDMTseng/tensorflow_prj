@@ -6,7 +6,7 @@ import tensorflow as tf
 from gym.envs.registration import register
 
 
-env = gym.make('CartPole-v0')
+env = gym.make('CartPole-v1')
 tf.reset_default_graph()
 
 
@@ -213,7 +213,7 @@ with tf.Session(graph=graph1) as sess:
         ns_vec = ns
         [nQ] =  qobj.QNet([ns_vec])
         #The Q-Network
-        maxMove = 200
+        maxMove = 500
         nr = 0
 
         exp_x=[]
