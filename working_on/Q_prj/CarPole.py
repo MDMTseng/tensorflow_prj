@@ -124,15 +124,13 @@ class QLearning_OBJ:
             sess.run([self.net_obj.train],feed_dict={self.state_in:states,self.targetQ_in:tarQ_arr})
 
     def experience_append(self,cs,a,nr,ns,isEnd=False,experience_limit=500):
-        if np.random.rand(1) < 0.1:
-            return
-        if len(self.exp_set['cs']) <self.experience_limit:
+        if len(self.exp_set['cs']) <experience_limit:
             self.exp_set['cs'].append(cs)
             self.exp_set[ 'a'].append(a)
             self.exp_set['nr'].append(nr)
             self.exp_set['ns'].append(ns)
             self.exp_set['isEnd'].append(isEnd)
-        else:
+        elif np.random.rand(1) < 0.2:
             idx = np.random.randint(len(self.exp_set[ 'cs']))
             self.exp_set[ 'cs'][idx] = cs
             self.exp_set[ 'a'][idx] = a
@@ -140,11 +138,12 @@ class QLearning_OBJ:
             self.exp_set[ 'ns'][idx] = ns
             self.exp_set['isEnd'][idx]=isEnd
 
+
     rewardHist_offset =1
     rewardHist=[0,0,0]
     def experience_append_b(self,cs,a,nr,ns,isEnd=False,experience_limit=500):
 
-        if len(self.exp_set['cs']) <self.experience_limit:
+        if len(self.exp_set['cs']) <experience_limit:
             self.exp_set['cs'].append(cs)
             self.exp_set[ 'a'].append(a)
             self.exp_set['nr'].append(nr)
@@ -188,7 +187,7 @@ def printQ(sess,env,state,Q):
     print(act_map[np.argmax( Q)])
 
 # Set learning parameters
-e = 0.0
+e = 0.1
 num_episodes = 40000
 #create lists to contain total rewards and steps per episode
 ave_r = 0
@@ -201,6 +200,7 @@ with tf.Session(graph=graph1) as sess:
     sess.run(init)
     print("env.action_space>>",env.action_space.__dict__)
 
+    stop_training =False
     acc_nr =0
     for i in range(num_episodes):
         #Reset environment and get first new observation
@@ -232,24 +232,28 @@ with tf.Session(graph=graph1) as sess:
             ns_vec = ns
             [nQ] =  qobj.QNet([ns_vec])
 
-            '''if i%100 == 99 :
-                printQ(sess,env,ns_vec,nQ)
-                #env.render()'''
+            if i%100 == 99 or stop_training :
+                #printQ(sess,env,ns_vec,nQ)
+                env.render()
+            if(stop_training == False):
+                if end == False:#reduce reward value to prevent
+                    qobj.experience_append(cs_vec,a,0.05,ns_vec)
+                else:
+                    turn_lifeTime=j
+                    ccc=0
+                    margin = 1
+                    qobj.experience_append(cs_vec,a,-0.05,ns_vec,True)
 
-            if end == False:#reduce reward value to prevent
-                qobj.experience_append(cs_vec,a,0.05,ns_vec)
-            else:
-                turn_lifeTime=j
-                ccc=0
-                margin = 1
-                qobj.experience_append(cs_vec,a,-0.05,ns_vec,True)
-
-                qobj.training_exp_replay_set()
-                break;
+                    qobj.training_exp_replay_set()
+                    qobj.training_exp_replay_set()
+                    qobj.training_exp_replay_set()
+                    break;
 
         summeryC=100
         if i%summeryC == (summeryC-1) :
-            e = (e-0.0)*0.99+0.0
-            print ("episodes: ", i, " acc_nr:", "%3.2f"% (100.0*acc_nr/(maxMove*summeryC)),"% e:",e)
+            e = (e-0.0)*0.9+0.0
+            srate = (100.0*acc_nr/(maxMove*summeryC))
+            print ("episodes: ", i, " acc_nr:", "%3.2f"%srate ,"% e:",e)
+            if(srate>97):stop_training = True
             ave_r = 0
             acc_nr =0
