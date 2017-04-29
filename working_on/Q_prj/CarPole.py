@@ -5,8 +5,13 @@ import random
 import tensorflow as tf
 from gym.envs.registration import register
 
-
-env = gym.make('CartPole-v1')
+register(
+    id='CartPole-v2',
+    entry_point='gym.envs.classic_control:CartPoleEnv',
+    tags={'wrapper_config.TimeLimit.max_episode_steps': 5000},
+    reward_threshold=4750.0,
+)
+env = gym.make('CartPole-v0')
 tf.reset_default_graph()
 
 
@@ -199,6 +204,7 @@ ave_r = 0
 with tf.Session(graph=graph1) as sess:
     sess.run(init)
     print("env.action_space>>",env.action_space.__dict__)
+    print("env.__dict__>>",env.__dict__)
 
     stop_training =False
     acc_nr =0
@@ -213,7 +219,7 @@ with tf.Session(graph=graph1) as sess:
         ns_vec = ns
         [nQ] =  qobj.QNet([ns_vec])
         #The Q-Network
-        maxMove = 500
+        maxMove = env._max_episode_steps
         nr = 0
 
         exp_x=[]
