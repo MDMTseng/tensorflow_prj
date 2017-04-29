@@ -35,56 +35,39 @@ class NNetwork_Obj:
         self.Net_graph(graph,net_input,targetOutput)
         self.Net_train_graph(graph,net_input,targetOutput)
 
-    def Net_graph_(self,graph,net_input,targetOutput):
-        with graph.as_default():
-            input_dim = net_input.shape.as_list()[1];
-            output_dim = targetOutput.shape.as_list()[1];
-
-            W = tf.Variable(tf.random_uniform([input_dim,150],-0.01,0.01))
-            B = tf.Variable(tf.random_uniform([150],-0.01,0.01))
-
-            Wo = tf.Variable(tf.random_uniform([150,output_dim],-0.01,0.01))
-            Bo = tf.Variable(tf.random_uniform([output_dim],-0.01,0.01))
-
-            H1 = tf.nn.relu(tf.matmul(net_input,W)+B)
-            #H2 = tf.nn.relu(tf.matmul(H1,W2)+B2)
-            self.output = tf.nn.tanh(tf.matmul(H1,Wo)+Bo)
-            self.Ws = [W,B,Wo,Bo];
     def Net_graph(self,graph,net_input,targetOutput):
-        with graph.as_default():
-            input_dim = net_input.shape.as_list()[1];
-            output_dim = targetOutput.shape.as_list()[1];
+        input_dim = net_input.shape.as_list()[1];
+        output_dim = targetOutput.shape.as_list()[1];
 
-            W = tf.Variable(tf.random_uniform([input_dim,50],-0.01,0.01))
-            B = tf.Variable(tf.random_uniform([50],-0.01,0.01))
+        W = tf.Variable(tf.random_uniform([input_dim,50],-0.001,0.001))
+        B = tf.Variable(tf.random_uniform([50],-0.001,0.001))
 
 
-            Wo = tf.Variable(tf.random_uniform([50,output_dim],-0.01,0.01))
-            Bo = tf.Variable(tf.random_uniform([output_dim],-0.01,0.01))
+        Wo = tf.Variable(tf.random_uniform([50,output_dim],-0.001,0.001))
+        Bo = tf.Variable(tf.random_uniform([output_dim],-0.001,0.001))
 
-            H1_val = tf.matmul(net_input,W)+B
+        H1_val = tf.matmul(net_input,W)+B
 
-            H1 = lrelu(H1_val)
-            #H2 = tf.nn.relu(tf.matmul(H1,W2)+B2)
-            output = (tf.matmul(H1,Wo)+Bo)
+        H1 = lrelu(H1_val)
+        #H2 = tf.nn.relu(tf.matmul(H1,W2)+B2)
+        output = (tf.matmul(H1,Wo)+Bo)
 
-            self.output = tanh(output)
-            self.Ws = [W,B,Wo,Bo];
+        self.output = tanh(output)
+        self.Ws = [W,B,Wo,Bo];
 
 
 
     def Net_train_graph(self,graph,net_input,targetOutput):
-        with graph.as_default():
-            loss = tf.reduce_sum(tf.square(targetOutput - self.output))
-            L2_reg = [p.assign(p*0.999) for p in self.Ws]
-            L1_reg = [p.assign(p-0.000001*tf.sign(p)) for p in self.Ws]
+        loss = tf.reduce_sum(tf.square(targetOutput - self.output))
+        L2_reg = [p.assign(p*0.999) for p in self.Ws]
+        L1_reg = [p.assign(p-0.000001*tf.sign(p)) for p in self.Ws]
 
-            regularizer = tf.contrib.layers.l2_regularizer(scale=0.001, scope=None)
-            regularization_penalty = tf.contrib.layers.apply_regularization(regularizer, self.Ws)
+        regularizer = tf.contrib.layers.l2_regularizer(scale=0.001, scope=None)
+        regularization_penalty = tf.contrib.layers.apply_regularization(regularizer, self.Ws)
 
-            regularized_loss = loss +regularization_penalty  # this loss needs to be minimized
+        regularized_loss = loss +regularization_penalty  # this loss needs to be minimized
 
-            self.train = tf.train.AdamOptimizer(0.001).minimize(regularized_loss)
+        self.train = tf.train.AdamOptimizer(0.001).minimize(regularized_loss)
 
 
 class QLearning_OBJ:
@@ -108,37 +91,39 @@ class QLearning_OBJ:
             return sess.run([self.net_obj.output],feed_dict={self.state_in:states})
 
 
-    exp_set={'cs':[],'a':[],'nr':[],'ns':[]}
+    exp_set={'cs':[],'a':[],'nr':[],'ns':[],'isEnd':[]}
     def training_exp_replay_set(self,experience=exp_set):
-        self.training_exp_replay(experience['cs'],experience['a'],experience['nr'],experience['ns'])
-    def training_exp_replay(self,cs_arr,a_arr,nr_arr,ns_arr):
+        self.training_exp_replay(experience['cs'],experience['a'],experience['nr'],experience['ns'],experience['isEnd'])
+    def training_exp_replay(self,cs_arr,a_arr,nr_arr,ns_arr,isEnd_arr):
         # current state, action, next reward, next state
         # => current state, Q; next state-> next Q(nQ)
         # => target Q = nr + gamma*(max(nQ))
         # => train (current state, target Q)
         alpha = 0.7
-        gamma = 0.99
+        gamma = 0.9
         with self.graph.as_default():
             [cQ] = self.QNet(cs_arr);
             [nQ] = self.QNet(ns_arr);
             for i in range(len(cQ)):
                 #print("cs:",cs_arr[i]," a:",a_arr[i]," nr:",nr_arr[i]," ns:",ns_arr[i],"<<<<")
-                cQ[i,a_arr[i]] = nr_arr[i] + gamma* np.max(nQ[i])
+                if(isEnd_arr[i]):
+                    tmp_cQ = nr_arr[i]
+                else:
+                    tmp_cQ = nr_arr[i] + gamma* np.max(nQ[i])
+
+                if(tmp_cQ>1):tmp_cQ=1
+                if(tmp_cQ<-1):tmp_cQ=-1
+                cQ[i,a_arr[i]]=tmp_cQ
 
             #for iii in range(len(cQ)):print(cQ[iii], "<><><", np.argmax( cs_arr[iii]))
             sess.run([self.net_obj.train],feed_dict={self.state_in:cs_arr,self.targetQ_in:cQ})
 
-            if(nr_arr[i] !=0):
-                nQ.fill(0)
-
-                sess.run([self.net_obj.train],feed_dict={self.state_in:ns_arr,self.targetQ_in:nQ})
 
     def training(self,states,tarQ_arr):
         with self.graph.as_default():
             sess.run([self.net_obj.train],feed_dict={self.state_in:states,self.targetQ_in:tarQ_arr})
 
-    experience_limit=500
-    def experience_append(self,cs,a,nr,ns):
+    def experience_append(self,cs,a,nr,ns,isEnd=False,experience_limit=500):
         if np.random.rand(1) < 0.1:
             return
         if len(self.exp_set['cs']) <self.experience_limit:
@@ -146,22 +131,25 @@ class QLearning_OBJ:
             self.exp_set[ 'a'].append(a)
             self.exp_set['nr'].append(nr)
             self.exp_set['ns'].append(ns)
+            self.exp_set['isEnd'].append(isEnd)
         else:
             idx = np.random.randint(len(self.exp_set[ 'cs']))
             self.exp_set[ 'cs'][idx] = cs
             self.exp_set[ 'a'][idx] = a
             self.exp_set[ 'nr'][idx] = nr
             self.exp_set[ 'ns'][idx] = ns
+            self.exp_set['isEnd'][idx]=isEnd
 
     rewardHist_offset =1
     rewardHist=[0,0,0]
-    def experience_append_b(self,cs,a,nr,ns):
+    def experience_append_b(self,cs,a,nr,ns,isEnd=False,experience_limit=500):
 
         if len(self.exp_set['cs']) <self.experience_limit:
             self.exp_set['cs'].append(cs)
             self.exp_set[ 'a'].append(a)
             self.exp_set['nr'].append(nr)
             self.exp_set['ns'].append(ns)
+            self.exp_set['isEnd'].append(isEnd)
         else:
             most_r = np.argmax( self.rewardHist) - self.rewardHist_offset#find the exp that we had most
 
@@ -174,6 +162,7 @@ class QLearning_OBJ:
             self.exp_set[ 'a'][idx] = a
             self.exp_set[ 'nr'][idx] = nr
             self.exp_set[ 'ns'][idx] = ns
+            self.exp_set['isEnd'][idx]=isEnd
 
 
         self.rewardHist[int(nr+self.rewardHist_offset)]+=1
@@ -199,7 +188,7 @@ def printQ(sess,env,state,Q):
     print(act_map[np.argmax( Q)])
 
 # Set learning parameters
-e = 0.7
+e = 0.0
 num_episodes = 40000
 #create lists to contain total rewards and steps per episode
 ave_r = 0
@@ -243,30 +232,24 @@ with tf.Session(graph=graph1) as sess:
             ns_vec = ns
             [nQ] =  qobj.QNet([ns_vec])
 
-            exp_x.append({'s':cs_vec,'a':a,'ns':ns_vec})
+            '''if i%100 == 99 :
+                printQ(sess,env,ns_vec,nQ)
+                #env.render()'''
 
-            if i%100 == 99 :
-                #printQ(sess,env,ns_vec,nQ)
-                env.render()
-            if end == True:
+            if end == False:#reduce reward value to prevent
+                qobj.experience_append(cs_vec,a,0.05,ns_vec)
+            else:
                 turn_lifeTime=j
                 ccc=0
-                margin = turn_lifeTime/10+2
-                for exp in exp_x:
-                    rw = 0
-                    if(turn_lifeTime<195 and ccc > turn_lifeTime-margin):
-                        rw=-1
-                    elif(ccc < turn_lifeTime/2-margin):
-                        rw = 1
-                    qobj.experience_append(exp['s'],exp['a'],rw,exp['ns'])
-                    ccc+=1
+                margin = 1
+                qobj.experience_append(cs_vec,a,-0.05,ns_vec,True)
 
                 qobj.training_exp_replay_set()
                 break;
 
-
-        if i%30 == 29 :
+        summeryC=100
+        if i%summeryC == (summeryC-1) :
             e = (e-0.0)*0.99+0.0
-            print ("episodes: ", i, " acc_nr:", "%3.2f"% (100.0*acc_nr/(maxMove*30)),"% e:",e, "rewardHist:",qobj.rewardHist)
+            print ("episodes: ", i, " acc_nr:", "%3.2f"% (100.0*acc_nr/(maxMove*summeryC)),"% e:",e)
             ave_r = 0
             acc_nr =0
