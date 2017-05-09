@@ -125,7 +125,7 @@ with tf.name_scope('D'):
     [print(v.name) for v in theta_D]
 
 
-    regularizer = tf.contrib.layers.l2_regularizer(scale=0.01, scope=None)
+    regularizer = tf.contrib.layers.l2_regularizer(scale=0.001, scope=None)
     D_reg_penalty = tf.contrib.layers.apply_regularization(regularizer, theta_D)
     D_solver = tf.train.RMSPropOptimizer(0.001).minimize(-D_loss+D_reg_penalty, var_list=theta_D)
     # theta_D is list of D's params
