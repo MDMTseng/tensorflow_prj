@@ -24,9 +24,15 @@ x,y,pred,cost,optimizer = MNIST_CN_GetNetwork()
 
 if(not os.path.isfile(model_path+".meta")):
     #Cannot find a trained network file, train it with 40 epoch.
-    TrainEchoCount=40
-    MNIST_CN_Traning(x,y,pred,cost,optimizer,TrainEchoCount,model_path,model_path)
-
+    TrainEchoCount=10
+    Accuracy = MNIST_CN_Traning(x,y,pred,cost,optimizer,TrainEchoCount,None,model_path)
+    while (Accuracy<0.95):
+        print("current Accuracy:",Accuracy);
+        #load and save network to model_path
+        Accuracy = MNIST_CN_Traning(x,y,pred,cost,optimizer,TrainEchoCount,model_path,model_path)
+else:
+    TrainEchoCount=20
+    #MNIST_CN_Traning(x,y,pred,cost,optimizer,TrainEchoCount,model_path,model_path)
 
 batch_x=[]
 for filePath in sys.argv[1:]:
@@ -64,7 +70,9 @@ def modelPredicting(model_import_path,dat_src):
     # Running first session
     print("Starting modelPredicting...")
     print("model_import_path:",model_import_path)
-    #print("dat_src:",dat_src)
+    if(batch_x.shape[0]==0):
+        print("No input data, return....")
+        return;
 
     with tf.Session() as sess:
         # Run the initializer

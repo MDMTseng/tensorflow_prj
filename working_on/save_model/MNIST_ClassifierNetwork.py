@@ -6,7 +6,7 @@ import tensorflow as tf
 
 # Parameters
 learning_rate = 0.001
-batch_size = 2000
+batch_size = 200
 display_step = 1
 
 # Network Parameters
@@ -99,8 +99,11 @@ def MNIST_CN_Traning(x,y,pred,cost,optimizer,epoch_count,model_import_path,model
         correct_prediction = tf.equal(tf.argmax(pred, 1), tf.argmax(y, 1))
         # Calculate accuracy
         accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float"))
-        print("Accuracy:", accuracy.eval({x: mnist.test.images, y: mnist.test.labels}))
+        Accuracy=accuracy.eval({x: mnist.test.images, y: mnist.test.labels})
+        print("Accuracy:", Accuracy)
 
-        # Save model weights to disk
-        save_path = saver.save(sess, model_export_path)
-        print("Model saved in file: %s" % save_path)
+        if model_export_path is not None:
+            # Save model weights to disk
+            save_path = saver.save(sess, model_export_path)
+            print("Model saved in file: %s" % save_path)
+        return Accuracy
